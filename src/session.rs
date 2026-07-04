@@ -14,6 +14,7 @@ use crate::analysis_session::AnalysisSettings;
 use crate::engine_shapes::engine_line_shapes;
 use crate::engine_uci::AnalysisResult;
 use crate::graph::{start_fen, turn_color, OpeningGraph};
+use crate::opening_book::{format_opening, lookup_fens};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ControlPanelTab {
@@ -307,6 +308,19 @@ impl ProfileSession {
 
     pub fn game_count(&self) -> u32 {
         self.graph.lock().expect("graph lock").game_count()
+    }
+
+    pub fn opening_label(&self) -> SharedString {
+        let fens: Vec<&str> = self
+            .history
+            .iter()
+            .take(self.history_index + 1)
+            .map(|step| step.fen.as_str())
+            .collect();
+        lookup_fens(&fens)
+            .map(|opening| format_opening(&opening))
+            .unwrap_or_else(|| "Unknown opening".into())
+            .into()
     }
 
     pub fn set_eval_pending(&mut self, cx: &mut App) {

@@ -15,6 +15,8 @@ mod engine_uci;
 mod engines;
 mod fetch;
 mod graph;
+mod lichess;
+mod opening_book;
 mod performance;
 mod pgn;
 mod profiles;

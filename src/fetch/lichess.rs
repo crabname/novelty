@@ -1,72 +1,22 @@
-//! Lichess NDJSON game export with `until` pagination.
+//! Lichess game export via [litchee] (NDJSON streaming with `until` pagination).
 
-use std::io::{BufRead, BufReader};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use serde::Deserialize;
+use futures_util::StreamExt;
+use litchee::api::gameplay::games::LichessGame;
+use litchee::model::{LichessColor, LichessSpeed};
 
 use crate::graph::{GameMeta, GameResult, MoveNotation};
+use crate::lichess::{self, block_on};
 
 use super::{
-    cancelled, http_client, no_games_message, LoadPeriod, LoadedGame, PlayerColor, StreamOutcome,
+    cancelled, no_games_message, LoadPeriod, LoadedGame, PlayerColor, StreamOutcome,
     TimeControlFilter,
 };
 
 /// Games per Lichess request (paginate with `until`).
 pub const LICHESS_CHUNK_SIZE: u32 = 200;
-
-#[derive(Deserialize)]
-struct LichessGame {
-    moves: String,
-    #[serde(default)]
-    speed: Option<String>,
-    #[serde(rename = "lastMoveAt", default)]
-    last_move_at: Option<i64>,
-    #[serde(default)]
-    winner: Option<String>,
-    #[serde(default)]
-    players: Option<LichessPlayers>,
-    #[serde(default)]
-    id: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct LichessPlayers {
-    white: LichessPlayer,
-    black: LichessPlayer,
-}
-
-#[derive(Deserialize, Default)]
-struct LichessPlayer {
-    #[serde(default)]
-    rating: Option<u32>,
-}
-
-pub(crate) fn lichess_games_url(
-    username: &str,
-    color: PlayerColor,
-    since: Option<i64>,
-    until: Option<i64>,
-    perf_types: Option<&str>,
-) -> String {
-    let user = urlencoding::encode(username.trim());
-    let mut url = format!(
-        "https://lichess.org/api/games/user/{user}?max={}&color={}&clocks=false&evals=false",
-        LICHESS_CHUNK_SIZE,
-        color.lichess_param()
-    );
-    if let Some(since) = since {
-        url.push_str(&format!("&since={since}"));
-    }
-    if let Some(until) = until {
-        url.push_str(&format!("&until={until}"));
-    }
-    if let Some(perf_types) = perf_types {
-        url.push_str(&format!("&perfType={}", urlencoding::encode(perf_types)));
-    }
-    url
-}
 
 /// Oldest `lastMoveAt` in a full chunk becomes the next `until` cursor.
 pub(crate) fn next_lichess_until(
@@ -86,21 +36,30 @@ pub(crate) fn next_lichess_until(
     Some(oldest - 1)
 }
 
+fn speed_name(speed: LichessSpeed) -> &'static str {
+    match speed {
+        LichessSpeed::UltraBullet => "ultraBullet",
+        LichessSpeed::Bullet => "bullet",
+        LichessSpeed::Blitz => "blitz",
+        LichessSpeed::Rapid => "rapid",
+        LichessSpeed::Classical => "classical",
+        LichessSpeed::Correspondence => "correspondence",
+        _ => "unknown",
+    }
+}
+
 fn lichess_meta(game: &LichessGame) -> GameMeta {
-    let result = match game.winner.as_deref() {
-        Some("white") => GameResult::WhiteWin,
-        Some("black") => GameResult::BlackWin,
-        _ => GameResult::Draw,
+    let result = match game.winner {
+        Some(LichessColor::White) => GameResult::WhiteWin,
+        Some(LichessColor::Black) => GameResult::BlackWin,
+        None => GameResult::Draw,
     };
     let (white_elo, black_elo) = game
         .players
         .as_ref()
-        .map(|p| (p.white.rating, p.black.rating))
+        .map(|players| (players.white.rating, players.black.rating))
         .unwrap_or((None, None));
-    let url = game
-        .id
-        .as_ref()
-        .map(|id| format!("https://lichess.org/{id}"));
+    let url = Some(format!("https://lichess.org/{}", game.id));
     GameMeta {
         result,
         white_elo,
@@ -111,31 +70,42 @@ fn lichess_meta(game: &LichessGame) -> GameMeta {
     }
 }
 
-fn stream_lichess_chunk(
-    client: &reqwest::blocking::Client,
-    url: &str,
+async fn stream_lichess_chunk(
+    client: &litchee::LichessClient,
+    username: &str,
+    color: PlayerColor,
     since: Option<i64>,
+    until: Option<i64>,
+    perf_types: Option<&str>,
     time_controls: TimeControlFilter,
     cancel: &Arc<AtomicBool>,
     on_game: &mut impl FnMut(LoadedGame) -> Result<(), String>,
 ) -> Result<(StreamOutcome, u32, u32, Option<i64>), String> {
-    let response = client
-        .get(url)
-        .header("Accept", "application/x-ndjson")
-        .send()
-        .map_err(|e| format!("Lichess request failed: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "Lichess HTTP {} — check username",
-            response.status()
-        ));
+    let mut request = client
+        .games()
+        .export_user(username)
+        .max(LICHESS_CHUNK_SIZE)
+        .color(color.lichess_param());
+    if let Some(since) = since {
+        request = request.since(since);
+    }
+    if let Some(until) = until {
+        request = request.until(until);
+    }
+    if let Some(perf_types) = perf_types {
+        request = request.perf_type(perf_types);
     }
 
-    let reader = BufReader::new(response);
+    let mut stream = request
+        .stream()
+        .await
+        .map_err(|err| format!("Lichess request failed: {err}"))?;
+
     let mut ingested = 0u32;
     let mut games_in_response = 0u32;
     let mut oldest_ts: Option<i64> = None;
-    for line in reader.lines() {
+
+    while let Some(item) = stream.next().await {
         if cancelled(cancel) {
             return Ok((
                 StreamOutcome::Cancelled,
@@ -144,22 +114,19 @@ fn stream_lichess_chunk(
                 oldest_ts,
             ));
         }
-        let line = line.map_err(|e| format!("Lichess stream: {e}"))?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let Ok(game) = serde_json::from_str::<LichessGame>(&line) else {
-            continue;
-        };
+        let game = item.map_err(|err| format!("Lichess stream: {err}"))?;
         games_in_response += 1;
         if let Some(ts) = game.last_move_at {
-            oldest_ts = Some(oldest_ts.map_or(ts, |o| o.min(ts)));
+            oldest_ts = Some(oldest_ts.map_or(ts, |current| current.min(ts)));
         }
-        if game.moves.is_empty() {
+        let Some(moves) = game.moves.clone() else {
+            continue;
+        };
+        if moves.is_empty() {
             continue;
         }
-        if let Some(speed) = game.speed.as_deref()
-            && !time_controls.matches_speed(speed)
+        if let Some(speed) = game.speed
+            && !time_controls.matches_speed(speed_name(speed))
         {
             continue;
         }
@@ -171,12 +138,13 @@ fn stream_lichess_chunk(
         }
         let meta = lichess_meta(&game);
         let _ = on_game(LoadedGame::Moves {
-            moves: game.moves,
+            moves,
             notation: MoveNotation::San,
             meta,
         });
         ingested += 1;
     }
+
     Ok((
         StreamOutcome::Completed,
         ingested,
@@ -185,38 +153,37 @@ fn stream_lichess_chunk(
     ))
 }
 
-pub(crate) fn stream_lichess(
+async fn stream_lichess_async(
     username: &str,
     color: PlayerColor,
     period: LoadPeriod,
     time_controls: TimeControlFilter,
+    token: Option<&str>,
     cancel: &Arc<AtomicBool>,
     on_game: &mut impl FnMut(LoadedGame) -> Result<(), String>,
 ) -> Result<(StreamOutcome, u32), String> {
+    let client = lichess::lichess_client(token)?;
     let since = period.since_millis();
     let perf_types = time_controls.lichess_perf_types();
-    let client = http_client();
     let mut ingested = 0u32;
     let mut until: Option<i64> = None;
+
     loop {
         if cancelled(cancel) {
             return Ok((StreamOutcome::Cancelled, ingested));
         }
-        let url = lichess_games_url(
+        let (outcome, chunk_ingested, games_in_response, oldest_ts) = stream_lichess_chunk(
+            &client,
             username,
             color,
             since,
             until,
             perf_types.as_deref(),
-        );
-        let (outcome, chunk_ingested, games_in_response, oldest_ts) = stream_lichess_chunk(
-            &client,
-            &url,
-            since,
             time_controls,
             cancel,
             on_game,
-        )?;
+        )
+        .await?;
         ingested += chunk_ingested;
         if outcome == StreamOutcome::Cancelled {
             return Ok((StreamOutcome::Cancelled, ingested));
@@ -226,10 +193,31 @@ pub(crate) fn stream_lichess(
             break;
         }
     }
+
     if ingested == 0 {
         return Err(no_games_message("Lichess", username, period));
     }
     Ok((StreamOutcome::Completed, ingested))
+}
+
+pub(crate) fn stream_lichess(
+    username: &str,
+    color: PlayerColor,
+    period: LoadPeriod,
+    time_controls: TimeControlFilter,
+    token: Option<&str>,
+    cancel: &Arc<AtomicBool>,
+    on_game: &mut impl FnMut(LoadedGame) -> Result<(), String>,
+) -> Result<(StreamOutcome, u32), String> {
+    block_on(stream_lichess_async(
+        username,
+        color,
+        period,
+        time_controls,
+        token,
+        cancel,
+        on_game,
+    ))
 }
 
 #[cfg(test)]

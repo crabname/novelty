@@ -87,6 +87,7 @@ impl NoveltyApp {
         let pgn_input = session.pgn_input.clone();
         let selected_engine = session.selected_engine_id.clone().unwrap_or_default();
         let engines = self.engines.clone();
+        let opening_label = session.opening_label();
 
         v_flex()
             .id("analysis-sidebar")
@@ -131,6 +132,15 @@ impl NoveltyApp {
                                             .text_color(cx.theme().muted_foreground),
                                     )
                                     .child(Input::new(&pgn_input).h(px(140.)).w_full()),
+                            ),
+                    )
+                    .child(
+                        GroupBox::new()
+                            .title("Opening")
+                            .child(
+                                Label::new(opening_label)
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground),
                             ),
                     )
                     .child(

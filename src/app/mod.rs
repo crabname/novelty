@@ -1,3 +1,4 @@
+mod lichess_account;
 mod load;
 mod uci;
 
@@ -12,6 +13,7 @@ use crate::analysis_session::AnalysisSession;
 use crate::engine_catalog::{self, CatalogOffer};
 use crate::engines::{self, LocalEngine};
 use crate::fetch::{LoadPeriod, PlayerColor, Site, TimeControlFilter};
+use crate::lichess::{self, LichessSession};
 use crate::profiles::remember_profile;
 use crate::session::ProfileSession;
 use crate::tab::{AppTab, TabKind};
@@ -30,6 +32,8 @@ pub struct NoveltyApp {
     pub(crate) profile_history: Vec<String>,
     pub(crate) site: Site,
     pub(crate) color: PlayerColor,
+    pub(crate) lichess_session: Option<LichessSession>,
+    pub(crate) lichess_auth_status: SharedString,
     pub(crate) time_controls: TimeControlFilter,
     pub(crate) pending_username: Option<String>,
     pub(crate) pending_profile_remember: Option<String>,
@@ -53,7 +57,7 @@ impl NoveltyApp {
         period_select: Entity<SelectState<Vec<LoadPeriod>>>,
         profile_select: Entity<SelectState<SearchableVec<String>>>,
         profile_history: Vec<String>,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let profile_select_watch = profile_select.clone();
@@ -65,6 +69,16 @@ impl NoveltyApp {
         })
         .detach();
 
+        let lichess_session = lichess::load_session();
+        let lichess_auth_status = lichess_session.as_ref().map_or(SharedString::default(), |s| {
+            format!("Connected to Lichess as {}", s.username).into()
+        });
+        if let Some(session) = &lichess_session {
+            username.update(cx, |input, cx| {
+                input.set_value(session.username.clone(), window, cx);
+            });
+        }
+
         Self {
             tabs: vec![AppTab::Home { id: 0 }],
             active_tab: 0,
@@ -75,6 +89,8 @@ impl NoveltyApp {
             profile_history,
             site: Site::Lichess,
             color: PlayerColor::White,
+            lichess_session,
+            lichess_auth_status,
             time_controls: TimeControlFilter::default(),
             pending_username: None,
             pending_profile_remember: None,
@@ -230,6 +246,7 @@ impl NoveltyApp {
             TabKind::OpeningTree => self.open_opening_tree_tab(window, cx),
             TabKind::GameAnalysis => self.open_game_analysis_tab(window, cx),
             TabKind::Engine => self.open_engines_tab(cx),
+            TabKind::Settings => self.open_settings_tab(cx),
             _ => {
                 let id = self.next_tab_id;
                 self.next_tab_id += 1;
@@ -238,6 +255,14 @@ impl NoveltyApp {
                 cx.notify();
             }
         }
+    }
+
+    fn open_settings_tab(&mut self, cx: &mut Context<Self>) {
+        let id = self.next_tab_id;
+        self.next_tab_id += 1;
+        self.tabs.push(AppTab::Settings { id });
+        self.active_tab = self.tabs.len() - 1;
+        cx.notify();
     }
 
     fn open_engines_tab(&mut self, cx: &mut Context<Self>) {

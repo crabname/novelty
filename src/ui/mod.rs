@@ -6,6 +6,7 @@ mod engines;
 mod history;
 mod home;
 mod next_moves;
+mod settings;
 mod sidebar;
 mod stub;
 mod tabs;
@@ -73,6 +74,7 @@ impl NoveltyApp {
             AppTab::OpeningTree { .. } => self.render_opening_tree(window, cx).into_any_element(),
             AppTab::GameAnalysis { .. } => self.render_game_analysis(window, cx).into_any_element(),
             AppTab::Engines { .. } => self.render_engines(cx).into_any_element(),
+            AppTab::Settings { .. } => self.render_settings(cx).into_any_element(),
             AppTab::Stub { kind, .. } => self.render_stub(*kind, cx).into_any_element(),
         }
     }

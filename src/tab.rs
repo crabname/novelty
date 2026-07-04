@@ -60,7 +60,7 @@ impl TabKind {
     }
 
     pub fn is_implemented(self) -> bool {
-        matches!(self, Self::OpeningTree | Self::Engine | Self::GameAnalysis)
+        matches!(self, Self::OpeningTree | Self::Engine | Self::GameAnalysis | Self::Settings)
     }
 
     pub fn icon(self) -> IconName {
@@ -95,6 +95,7 @@ pub enum AppTab {
     OpeningTree { id: u64, session: ProfileSession },
     GameAnalysis { id: u64, session: AnalysisSession },
     Engines { id: u64 },
+    Settings { id: u64 },
     Stub { id: u64, kind: TabKind },
 }
 
@@ -105,6 +106,7 @@ impl AppTab {
             Self::OpeningTree { id, .. } => *id,
             Self::GameAnalysis { id, .. } => *id,
             Self::Engines { id } => *id,
+            Self::Settings { id } => *id,
             Self::Stub { id, .. } => *id,
         }
     }
@@ -115,6 +117,7 @@ impl AppTab {
             Self::OpeningTree { session, .. } => session.label.clone(),
             Self::GameAnalysis { session, .. } => session.label.clone(),
             Self::Engines { .. } => TabKind::Engine.label().into(),
+            Self::Settings { .. } => TabKind::Settings.label().into(),
             Self::Stub { kind, .. } => kind.label().into(),
         }
     }

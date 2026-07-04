@@ -10,6 +10,7 @@ use gpui_chessboard::{
 use crate::engine_shapes::engine_line_shapes;
 use crate::engine_uci::AnalysisResult;
 use crate::graph::{legal_dests_at, play_move_keys, start_fen, turn_color};
+use crate::opening_book::{format_opening, lookup_fens};
 use crate::pgn::{self, ParsedGame};
 use crate::session::HistoryStep;
 
@@ -297,5 +298,18 @@ impl AnalysisSession {
         self.analyzing = false;
         self.analysis = None;
         self.status = message.into();
+    }
+
+    pub fn opening_label(&self) -> SharedString {
+        let fens: Vec<&str> = self
+            .history
+            .iter()
+            .take(self.history_index + 1)
+            .map(|step| step.fen.as_str())
+            .collect();
+        lookup_fens(&fens)
+            .map(|opening| format_opening(&opening))
+            .unwrap_or_else(|| "Unknown opening".into())
+            .into()
     }
 }

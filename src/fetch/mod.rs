@@ -230,11 +230,20 @@ pub fn stream_games(
     color: PlayerColor,
     period: LoadPeriod,
     time_controls: TimeControlFilter,
+    lichess_token: Option<&str>,
     cancel: &Arc<AtomicBool>,
     mut on_game: impl FnMut(LoadedGame) -> Result<(), String>,
 ) -> Result<(StreamOutcome, u32), String> {
     match site {
-        Site::Lichess => lichess::stream_lichess(username, color, period, time_controls, cancel, &mut on_game),
+        Site::Lichess => lichess::stream_lichess(
+            username,
+            color,
+            period,
+            time_controls,
+            lichess_token,
+            cancel,
+            &mut on_game,
+        ),
         Site::ChessCom => {
             chesscom::stream_chesscom(username, color, period, time_controls, cancel, &mut on_game)
         }

@@ -41,6 +41,7 @@ impl NoveltyApp {
             .id;
         let site = self.site;
         let color = self.color;
+        let lichess_token = self.lichess_token_for_load(&trimmed);
         let time_controls = self.time_controls;
         let session = self.active_opening_tree_mut().expect("opening tree tab");
         session.reset_for_load(trimmed.clone(), cx);
@@ -68,6 +69,7 @@ impl NoveltyApp {
             let fetch_user_thread = fetch_user.clone();
             let cancel_bg = cancel.clone();
 
+            let lichess_token = lichess_token.clone();
             std::thread::spawn(move || {
                 let result = crate::fetch::stream_games(
                     site,
@@ -75,6 +77,7 @@ impl NoveltyApp {
                     color,
                     period,
                     time_controls,
+                    lichess_token.as_deref(),
                     &cancel_bg,
                     |game| {
                         let mut g = graph_bg.lock().expect("graph lock");

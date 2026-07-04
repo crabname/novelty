@@ -19,6 +19,9 @@ serde_json = "1"
 shakmaty = { version = "0.30", default-features = false, features = ["variant"] }
 ruci = { version = "2.1", default-features = false, features = ["engine-sync"] }
 urlencoding = "2"
+litchee = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros"] }
+futures-util = "0.3"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 rfd = "0.15"
 zip = "2"
