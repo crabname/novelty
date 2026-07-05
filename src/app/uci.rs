@@ -6,7 +6,7 @@ use std::time::Duration;
 use gpui::*;
 
 use crate::engine_uci::{poll_uci_events, AnalysisRequest, UciEvent, UciSession};
-use crate::session::ControlPanelTab;
+use crate::panel_tabs::SidePanelTab;
 
 use super::NoveltyApp;
 
@@ -55,7 +55,7 @@ impl NoveltyApp {
         cx: &mut Context<Self>,
     ) {
         if let Some(session) = self.game_analysis_by_id_mut(tab_id) {
-            session.selected_engine_id = Some(engine_id.to_string());
+            session.engine.selected_engine_id = Some(engine_id.to_string());
         }
         self.analyze_game_position(tab_id, engine_id, cx);
     }
@@ -67,8 +67,8 @@ impl NoveltyApp {
         cx: &mut Context<Self>,
     ) {
         if let Some(session) = self.opening_tree_by_id_mut(session_id) {
-            session.selected_engine_id = Some(engine_id.to_string());
-            session.control_tab = ControlPanelTab::Engine;
+            session.engine.selected_engine_id = Some(engine_id.to_string());
+            session.side_panel_tab = SidePanelTab::Engine;
         }
         self.analyze_opening_tree_position(session_id, engine_id, cx);
     }
@@ -80,7 +80,7 @@ impl NoveltyApp {
     ) {
         let engine_id = self
             .game_analysis_by_id_mut(tab_id)
-            .and_then(|session| session.selected_engine_id.clone());
+            .and_then(|session| session.engine.selected_engine_id.clone());
         let Some(engine_id) = engine_id else {
             return;
         };
@@ -94,7 +94,7 @@ impl NoveltyApp {
     ) {
         let engine_id = self
             .opening_tree_by_id_mut(session_id)
-            .and_then(|session| session.selected_engine_id.clone());
+            .and_then(|session| session.engine.selected_engine_id.clone());
         let Some(engine_id) = engine_id else {
             return;
         };
@@ -251,7 +251,7 @@ impl NoveltyApp {
 
         let engine_id = engine_id.to_string();
         if let Some(session) = self.game_analysis_by_id_mut(tab_id) {
-            session.selected_engine_id = Some(engine_id.clone());
+            session.engine.selected_engine_id = Some(engine_id.clone());
             session.set_analysis_pending(cx);
         }
 
@@ -279,7 +279,7 @@ impl NoveltyApp {
 
         let engine_id = engine_id.to_string();
         if let Some(session) = self.opening_tree_by_id_mut(session_id) {
-            session.selected_engine_id = Some(engine_id.clone());
+            session.engine.selected_engine_id = Some(engine_id.clone());
             session.set_eval_pending(cx);
         }
 
@@ -373,11 +373,21 @@ impl NoveltyApp {
                 .iter()
                 .find(|tab| tab.id() == tab_id)
                 .and_then(|tab| tab.game_analysis())
-                .map(|session| (session.settings.depth, session.settings.line_count))
+                .map(|session| {
+                    (
+                        session.engine.settings.depth,
+                        session.engine.settings.line_count,
+                    )
+                })
                 .unwrap_or((16, 3)),
             Some(AnalysisTarget::OpeningTree(session_id)) => self
                 .opening_tree_by_id(session_id)
-                .map(|session| (session.settings.depth, session.settings.line_count))
+                .map(|session| {
+                    (
+                        session.engine.settings.depth,
+                        session.engine.settings.line_count,
+                    )
+                })
                 .unwrap_or((14, 3)),
             None => (16, 1),
         }

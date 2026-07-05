@@ -442,6 +442,22 @@ pub fn legal_dests_at(fen: &str) -> Result<Dests, String> {
     Ok(dests)
 }
 
+pub fn play_san_at(fen: &str, san: &str) -> Result<(String, String, Key, Key), String> {
+    let pos = chess_from_fen(fen)?;
+    let san: shakmaty::san::San = san
+        .parse()
+        .map_err(|_| format!("invalid SAN: {san}"))?;
+    let m = san
+        .to_move(&pos)
+        .map_err(|_| format!("illegal SAN in position: {san}"))?;
+    let label = san.to_string();
+    let mut next = pos.clone();
+    next.play_unchecked(m);
+    let target_fen = simplified_fen(&position_fen(&next));
+    let (orig_key, dest_key) = move_keys(m);
+    Ok((target_fen, label, orig_key, dest_key))
+}
+
 pub fn play_move_keys(fen: &str, orig: &Key, dest: &Key) -> Result<(String, String, Key, Key), String> {
     let pos = chess_from_fen(fen)?;
     let from = square_from_key(orig).ok_or("invalid origin square")?;

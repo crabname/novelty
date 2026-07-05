@@ -9,6 +9,7 @@ use gpui_component::separator::Separator;
 use gpui_component::*;
 
 use crate::app::NoveltyApp;
+use crate::panel_tabs::SidePanelTab;
 use crate::pgn_tree::notation_segments;
 use crate::repertoire::repertoire_display_name;
 
@@ -55,8 +56,53 @@ impl NoveltyApp {
                                 }),
                             )
                             .child(self.render_repertoire_board(active)),
-                    ),
+                    )
+                    .child(self.render_repertoire_panel(active, cx)),
             )
+    }
+
+    fn render_repertoire_panel(
+        &mut self,
+        session_index: usize,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        if let Some(session) = self.repertoire_at(session_index) {
+            self.refresh_explorer_if_needed(session.id, cx);
+        }
+        let tab_id = self
+            .repertoire_at(session_index)
+            .map(|session| session.id)
+            .unwrap_or(0);
+        let tabs = SidePanelTab::REPERTOIRE;
+        let selected_index = self
+            .repertoire_at(session_index)
+            .map(|session| session.side_panel_tab.index_in(tabs))
+            .unwrap_or(0);
+
+        let content = self
+            .render_explorer_moves_table(session_index, cx)
+            .into_any_element();
+
+        let panel_id = SharedString::from(format!("repertoire-panel-{tab_id}"));
+
+        self.render_right_panel(
+            panel_id,
+            tabs,
+            selected_index,
+            move |this, index, cx| {
+                let tab_id = this
+                    .repertoire_at(session_index)
+                    .map(|session| session.id)
+                    .unwrap_or(0);
+                if let Some(session) = this.repertoire_at_mut(session_index) {
+                    session.side_panel_tab = SidePanelTab::from_index(tabs, index);
+                }
+                this.refresh_explorer_if_needed(tab_id, cx);
+                cx.notify();
+            },
+            content,
+            cx,
+        )
     }
 
     fn render_repertoire_sidebar(
@@ -272,6 +318,7 @@ impl NoveltyApp {
                                             {
                                                 session.go_back(cx);
                                             }
+                                            this.refresh_explorer_if_needed(tab_id, cx);
                                             cx.notify();
                                         })),
                                     )
@@ -287,6 +334,7 @@ impl NoveltyApp {
                                             {
                                                 session.go_forward(cx);
                                             }
+                                            this.refresh_explorer_if_needed(tab_id, cx);
                                             cx.notify();
                                         })),
                                     )
@@ -302,6 +350,7 @@ impl NoveltyApp {
                                             {
                                                 session.go_to_position(Vec::new(), cx);
                                             }
+                                            this.refresh_explorer_if_needed(tab_id, cx);
                                             cx.notify();
                                         })),
                                     ),
@@ -366,6 +415,11 @@ impl NoveltyApp {
             })
             .unwrap_or_default();
 
+        let tab_id = self
+            .repertoire_at(session_index)
+            .map(|session| session.id)
+            .unwrap_or(0);
+
         let start_cell = div()
             .id(SharedString::from(format!("repertoire-start-{session_index}")))
             .px_1()
@@ -381,6 +435,7 @@ impl NoveltyApp {
                     if let Some(session) = this.repertoire_at_mut(session_index) {
                         session.go_to_position(Vec::new(), cx);
                     }
+                    this.refresh_explorer_if_needed(tab_id, cx);
                     cx.notify();
                 }),
             )
@@ -431,6 +486,7 @@ impl NoveltyApp {
                                 if let Some(session) = this.repertoire_at_mut(session_index) {
                                     session.go_to_position(position.clone(), cx);
                                 }
+                                this.refresh_explorer_if_needed(tab_id, cx);
                                 cx.notify();
                             }),
                         )

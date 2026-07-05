@@ -5,6 +5,9 @@
 //!
 //! Run: `cargo run`
 
+mod board;
+mod engine_state;
+mod panel_tabs;
 mod analysis_session;
 mod app;
 mod constants;
@@ -17,6 +20,7 @@ mod fetch;
 mod graph;
 mod lichess;
 mod opening_book;
+mod opening_explorer;
 mod performance;
 mod pgn;
 mod profiles;

@@ -104,7 +104,7 @@ impl NoveltyApp {
                                             if let Some(session) =
                                                 this.game_analysis_at_mut(session_index)
                                             {
-                                                session.settings.show_engine_lines = *checked;
+                                                session.engine.settings.show_engine_lines = *checked;
                                                 session.refresh_board(cx);
                                             }
                                         }
@@ -114,7 +114,7 @@ impl NoveltyApp {
                                             if let Some(session) =
                                                 this.opening_tree_at_mut(session_index)
                                             {
-                                                session.settings.show_engine_lines = *checked;
+                                                session.engine.settings.show_engine_lines = *checked;
                                                 session.refresh_board(cx);
                                             }
                                         }
@@ -233,8 +233,8 @@ impl NoveltyApp {
                         } => {
                             if let Some(session) = this.game_analysis_at_mut(session_index) {
                                 match kind {
-                                    "depth" => session.settings.depth = value,
-                                    "lines" => session.settings.line_count = value,
+                                    "depth" => session.engine.settings.depth = value,
+                                    "lines" => session.engine.settings.line_count = value,
                                     _ => {}
                                 }
                             }
@@ -246,8 +246,8 @@ impl NoveltyApp {
                         } => {
                             if let Some(session) = this.opening_tree_at_mut(session_index) {
                                 match kind {
-                                    "depth" => session.settings.depth = value,
-                                    "lines" => session.settings.line_count = value,
+                                    "depth" => session.engine.settings.depth = value,
+                                    "lines" => session.engine.settings.line_count = value,
                                     _ => {}
                                 }
                             }

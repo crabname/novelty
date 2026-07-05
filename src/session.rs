@@ -5,39 +5,15 @@ use std::sync::{Arc, Mutex};
 
 use gpui::*;
 
-use gpui_chessboard::{
-    config::DrawableConfigPatch, config::EvalConfigPatch, config::MovableConfigPatch,
-    ChessboardApi, ChessboardView, Config, EvalBarPosition, Key, MovableColor,
-};
+use gpui_chessboard::{ChessboardApi, ChessboardView, Key};
 
 use crate::analysis_session::AnalysisSettings;
-use crate::engine_shapes::engine_line_shapes;
+use crate::board::{apply_board_config, BoardConfig};
+use crate::engine_state::EngineState;
 use crate::engine_uci::AnalysisResult;
-use crate::graph::{start_fen, turn_color, OpeningGraph};
+use crate::graph::{start_fen, OpeningGraph};
 use crate::opening_book::{format_opening, lookup_fens};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum ControlPanelTab {
-    #[default]
-    NextMoves,
-    Engine,
-}
-
-impl ControlPanelTab {
-    pub fn index(self) -> usize {
-        match self {
-            Self::NextMoves => 0,
-            Self::Engine => 1,
-        }
-    }
-
-    pub fn from_index(index: usize) -> Self {
-        match index {
-            1 => Self::Engine,
-            _ => Self::NextMoves,
-        }
-    }
-}
+use crate::panel_tabs::SidePanelTab;
 
 #[derive(Clone, Debug)]
 pub struct HistoryStep {
@@ -82,11 +58,8 @@ pub struct ProfileSession {
     pub status: SharedString,
     pub loading: bool,
     pub next_move_count: usize,
-    pub control_tab: ControlPanelTab,
-    pub selected_engine_id: Option<String>,
-    pub analyzing: bool,
-    pub analysis: Option<AnalysisResult>,
-    pub settings: AnalysisSettings,
+    pub side_panel_tab: SidePanelTab,
+    pub engine: EngineState,
 }
 
 impl ProfileSession {
@@ -113,14 +86,16 @@ impl ProfileSession {
             status: "Load games from the sidebar".into(),
             loading: false,
             next_move_count: 0,
-            control_tab: ControlPanelTab::NextMoves,
-            selected_engine_id: None,
-            analyzing: false,
-            analysis: None,
-            settings: AnalysisSettings {
-                depth: 14,
-                line_count: 3,
-                show_engine_lines: true,
+            side_panel_tab: SidePanelTab::Moves,
+            engine: EngineState {
+                selected_engine_id: None,
+                analyzing: false,
+                analysis: None,
+                settings: AnalysisSettings {
+                    depth: 14,
+                    line_count: 3,
+                    show_engine_lines: true,
+                },
             },
         }
     }
@@ -144,15 +119,9 @@ impl ProfileSession {
         let graph = self.graph.lock().expect("graph lock");
         let moves = graph.moves_at(&self.current_fen);
         self.next_move_count = moves.len();
-        let shapes = OpeningGraph::auto_shapes(&self.current_fen, &graph);
-        let mut shapes = shapes;
-        if self.settings.show_engine_lines
-            && let Some(analysis) = &self.analysis
-        {
-            shapes.extend(engine_line_shapes(analysis));
-        }
+        let mut shapes = OpeningGraph::auto_shapes(&self.current_fen, &graph);
+        shapes.extend(self.engine.board_shapes());
         let dests = OpeningGraph::dests_for_moves(&moves);
-        let turn = turn_color(&self.current_fen);
         drop(graph);
 
         let last_move = self
@@ -163,45 +132,15 @@ impl ProfileSession {
                 _ => None,
             });
 
-        let eval = if self.selected_engine_id.is_some() {
-            Some(EvalConfigPatch {
-                enabled: Some(true),
-                position: Some(EvalBarPosition::Left),
-                display: Some(if self.analyzing {
-                    None
-                } else {
-                    self.analysis.as_ref().and_then(|result| result.best_eval())
-                }),
-            })
-        } else {
-            Some(EvalConfigPatch {
-                enabled: Some(false),
-                ..Default::default()
-            })
+        let config = BoardConfig {
+            fen: self.current_fen.clone(),
+            last_move,
+            dests,
+            show_dests: self.next_move_count > 0,
+            shapes,
+            eval: self.engine.eval_patch(),
         };
-
-        self.api.set(
-            Config {
-                fen: Some(self.current_fen.clone()),
-                turn_color: Some(turn),
-                view_only: Some(false),
-                last_move: Some(last_move),
-                movable: Some(MovableConfigPatch {
-                    free: Some(false),
-                    color: Some(Some(MovableColor::Both)),
-                    dests: Some(Some(dests)),
-                    show_dests: Some(!moves.is_empty()),
-                    ..Default::default()
-                }),
-                drawable: Some(DrawableConfigPatch {
-                    auto_shapes: Some(shapes),
-                    ..Default::default()
-                }),
-                eval,
-                ..Default::default()
-            },
-            cx,
-        );
+        apply_board_config(&self.api, &config, cx);
     }
 
     pub fn on_board_changed(&mut self, cx: &mut App) -> bool {
@@ -324,24 +263,20 @@ impl ProfileSession {
     }
 
     pub fn set_eval_pending(&mut self, cx: &mut App) {
-        self.analyzing = true;
-        self.analysis = None;
+        self.engine.set_eval_pending();
         self.refresh_board(cx);
     }
 
     pub fn apply_engine_analysis(&mut self, result: &AnalysisResult, cx: &mut App) {
-        self.analyzing = false;
-        self.analysis = Some(result.clone());
+        self.engine.apply_analysis(result);
         self.refresh_board(cx);
     }
 
     pub fn set_engine_analysis_error(&mut self) {
-        self.analyzing = false;
-        self.analysis = None;
+        self.engine.clear_analysis();
     }
 
     fn clear_engine_analysis(&mut self) {
-        self.analyzing = false;
-        self.analysis = None;
+        self.engine.clear_analysis();
     }
 }

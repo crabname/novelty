@@ -78,7 +78,11 @@ impl NoveltyApp {
         let history_index = session.history_index;
         let next_move_count = session.next_move_count;
         let opening_label = session.opening_label();
-        let selected_engine = session.selected_engine_id.clone().unwrap_or_default();
+        let selected_engine = session
+            .engine
+            .selected_engine_id
+            .clone()
+            .unwrap_or_default();
         let engines = self.engines.clone();
 
         v_flex()

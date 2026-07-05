@@ -1,6 +1,7 @@
 mod repertoire;
 mod lichess_account;
 mod load;
+mod explorer;
 mod uci;
 
 use std::collections::HashMap;
@@ -202,7 +203,7 @@ impl NoveltyApp {
             {
                 let session_id = session.id;
                 let moved = session.on_board_changed(cx);
-                if moved && session.selected_engine_id.is_some() {
+                if moved && session.engine.selected_engine_id.is_some() {
                     self.refresh_opening_tree_eval_if_engine_selected(session_id, cx);
                 }
             }
@@ -224,10 +225,12 @@ impl NoveltyApp {
             else {
                 return;
             };
-            if let Some(session) = self.tabs.get_mut(index).and_then(|tab| tab.repertoire_mut())
-                && session.on_board_changed(cx) && index == self.active_tab
-            {
-                cx.notify();
+            if let Some(session) = self.tabs.get_mut(index).and_then(|tab| tab.repertoire_mut()) {
+                let tab_id = session.id;
+                let moved = session.on_board_changed(cx);
+                if moved {
+                    self.refresh_explorer_if_needed(tab_id, cx);
+                }
             }
             if index == self.active_tab {
                 cx.notify();
@@ -236,8 +239,12 @@ impl NoveltyApp {
         };
         if let Some(session) = self.tabs.get_mut(index).and_then(|tab| tab.game_analysis_mut()) {
             let tab_id = session.id;
-            if session.on_board_changed(cx) && index == self.active_tab {
-                self.refresh_analysis_if_engine_selected(tab_id, cx);
+            let moved = session.on_board_changed(cx);
+            if moved {
+                self.refresh_explorer_if_needed(tab_id, cx);
+                if index == self.active_tab {
+                    self.refresh_analysis_if_engine_selected(tab_id, cx);
+                }
             }
         }
         if index == self.active_tab {
@@ -473,6 +480,7 @@ impl NoveltyApp {
                     let tab_id = session.id;
                     session.go_back(cx);
                     self.refresh_analysis_if_engine_selected(tab_id, cx);
+                    self.refresh_explorer_if_needed(tab_id, cx);
                     cx.notify();
                 } else if let Some(session) = self.active_repertoire_mut() {
                     cx.stop_propagation();
@@ -492,6 +500,7 @@ impl NoveltyApp {
                     let tab_id = session.id;
                     session.go_forward(cx);
                     self.refresh_analysis_if_engine_selected(tab_id, cx);
+                    self.refresh_explorer_if_needed(tab_id, cx);
                     cx.notify();
                 } else if let Some(session) = self.active_repertoire_mut() {
                     cx.stop_propagation();

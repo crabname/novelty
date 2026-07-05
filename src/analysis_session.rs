@@ -2,40 +2,17 @@
 
 use gpui::*;
 use gpui_component::input::InputState;
-use gpui_chessboard::{
-    config::DrawableConfigPatch, config::EvalConfigPatch, config::MovableConfigPatch,
-    ChessboardApi, ChessboardView, Config, EvalBarPosition, Key, MovableColor,
-};
+use gpui_chessboard::{ChessboardApi, ChessboardView, Key};
 
-use crate::engine_shapes::engine_line_shapes;
+use crate::board::{apply_board_config, BoardConfig};
+use crate::engine_state::EngineState;
 use crate::engine_uci::AnalysisResult;
-use crate::graph::{legal_dests_at, play_move_keys, start_fen, turn_color};
+use crate::graph::{legal_dests_at, play_move_keys, play_san_at, start_fen};
 use crate::opening_book::{format_opening, lookup_fens};
+use crate::opening_explorer::{ExplorerHost, ExplorerState};
+use crate::panel_tabs::SidePanelTab;
 use crate::pgn::{self, ParsedGame};
 use crate::session::HistoryStep;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum AnalysisPanelTab {
-    #[default]
-    Engine,
-    Game,
-}
-
-impl AnalysisPanelTab {
-    pub fn index(self) -> usize {
-        match self {
-            Self::Engine => 0,
-            Self::Game => 1,
-        }
-    }
-
-    pub fn from_index(index: usize) -> Self {
-        match index {
-            1 => Self::Game,
-            _ => Self::Engine,
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct AnalysisSettings {
@@ -67,11 +44,9 @@ pub struct AnalysisSession {
     pub last_synced_move: Option<(Key, Key)>,
     pub last_parsed_pgn: String,
     pub status: SharedString,
-    pub selected_engine_id: Option<String>,
-    pub analyzing: bool,
-    pub analysis: Option<AnalysisResult>,
-    pub settings: AnalysisSettings,
-    pub panel_tab: AnalysisPanelTab,
+    pub engine: EngineState,
+    pub side_panel_tab: SidePanelTab,
+    pub explorer: ExplorerState,
 }
 
 impl AnalysisSession {
@@ -95,11 +70,14 @@ impl AnalysisSession {
             last_synced_move: None,
             last_parsed_pgn: String::new(),
             status: "Paste PGN or play moves on the board".into(),
-            selected_engine_id: None,
-            analyzing: false,
-            analysis: None,
-            settings: AnalysisSettings::default(),
-            panel_tab: AnalysisPanelTab::Engine,
+            engine: EngineState {
+                selected_engine_id: None,
+                analyzing: false,
+                analysis: None,
+                settings: AnalysisSettings::default(),
+            },
+            side_panel_tab: SidePanelTab::Engine,
+            explorer: ExplorerState::default(),
         }
     }
 
@@ -151,54 +129,15 @@ impl AnalysisSession {
                 _ => None,
             });
 
-        let dests = legal_dests_at(&self.current_fen).unwrap_or_default();
-
-        let mut shapes = Vec::new();
-        if self.settings.show_engine_lines
-            && let Some(result) = &self.analysis
-        {
-            shapes.extend(engine_line_shapes(result));
-        }
-
-        let eval = if self.selected_engine_id.is_some() {
-            Some(EvalConfigPatch {
-                enabled: Some(true),
-                position: Some(EvalBarPosition::Left),
-                display: Some(if self.analyzing {
-                    None
-                } else {
-                    self.analysis.as_ref().and_then(|result| result.best_eval())
-                }),
-            })
-        } else {
-            Some(EvalConfigPatch {
-                enabled: Some(false),
-                ..Default::default()
-            })
+        let config = BoardConfig {
+            fen: self.current_fen.clone(),
+            last_move,
+            dests: legal_dests_at(&self.current_fen).unwrap_or_default(),
+            show_dests: true,
+            shapes: self.engine.board_shapes(),
+            eval: self.engine.eval_patch(),
         };
-
-        self.api.set(
-            Config {
-                fen: Some(self.current_fen.clone()),
-                turn_color: Some(turn_color(&self.current_fen)),
-                view_only: Some(false),
-                last_move: Some(last_move),
-                movable: Some(MovableConfigPatch {
-                    free: Some(false),
-                    color: Some(Some(MovableColor::Both)),
-                    dests: Some(Some(dests)),
-                    show_dests: Some(true),
-                    ..Default::default()
-                }),
-                drawable: Some(DrawableConfigPatch {
-                    auto_shapes: Some(shapes),
-                    ..Default::default()
-                }),
-                eval,
-                ..Default::default()
-            },
-            cx,
-        );
+        apply_board_config(&self.api, &config, cx);
     }
 
     pub fn on_board_changed(&mut self, cx: &mut App) -> bool {
@@ -278,25 +217,21 @@ impl AnalysisSession {
     }
 
     fn clear_analysis(&mut self) {
-        self.analyzing = false;
-        self.analysis = None;
+        self.engine.clear_analysis();
     }
 
     pub fn set_analysis_pending(&mut self, cx: &mut App) {
-        self.analyzing = true;
-        self.analysis = None;
+        self.engine.set_eval_pending();
         self.refresh_board(cx);
     }
 
     pub fn apply_analysis(&mut self, result: &AnalysisResult, cx: &mut App) {
-        self.analyzing = false;
-        self.analysis = Some(result.clone());
+        self.engine.apply_analysis(result);
         self.refresh_board(cx);
     }
 
     pub fn set_analysis_error(&mut self, message: String) {
-        self.analyzing = false;
-        self.analysis = None;
+        self.engine.clear_analysis();
         self.status = message.into();
     }
 
@@ -311,5 +246,27 @@ impl AnalysisSession {
             .map(|opening| format_opening(&opening))
             .unwrap_or_else(|| "Unknown opening".into())
             .into()
+    }
+}
+
+impl ExplorerHost for AnalysisSession {
+    fn explorer_fen(&self) -> &str {
+        &self.current_fen
+    }
+
+    fn explorer_state(&self) -> &ExplorerState {
+        &self.explorer
+    }
+
+    fn explorer_state_mut(&mut self) -> &mut ExplorerState {
+        &mut self.explorer
+    }
+
+    fn play_explorer_san(&mut self, san: &str, cx: &mut App) {
+        let Ok((target_fen, san, orig, dest)) = play_san_at(&self.current_fen, san) else {
+            return;
+        };
+        self.last_synced_move = Some((orig.clone(), dest.clone()));
+        self.append_history_step(target_fen, san, orig, dest, cx);
     }
 }

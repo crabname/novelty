@@ -6,10 +6,9 @@ use gpui_component::input::Input;
 use gpui_component::label::Label;
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::separator::Separator;
-use gpui_component::tab::{Tab, TabBar};
 use gpui_component::*;
 
-use crate::analysis_session::AnalysisPanelTab;
+use crate::panel_tabs::SidePanelTab;
 use crate::app::NoveltyApp;
 use crate::session::HistoryStep;
 use crate::ui::engine_panel::{EnginePanelState, EnginePanelTarget};
@@ -19,7 +18,7 @@ const ANALYSIS_SIDEBAR_WIDTH: f32 = 280.;
 
 impl NoveltyApp {
     pub(crate) fn render_game_analysis(
-        &self,
+        &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -85,7 +84,11 @@ impl NoveltyApp {
         let history_index = session.history_index;
         let move_total = session.history.len().saturating_sub(1);
         let pgn_input = session.pgn_input.clone();
-        let selected_engine = session.selected_engine_id.clone().unwrap_or_default();
+        let selected_engine = session
+            .engine
+            .selected_engine_id
+            .clone()
+            .unwrap_or_default();
         let engines = self.engines.clone();
         let opening_label = session.opening_label();
 
@@ -193,6 +196,7 @@ impl NoveltyApp {
                                                 session.go_back(cx);
                                             }
                                             this.refresh_analysis_if_engine_selected(tab_id, cx);
+                                            this.refresh_explorer_if_needed(tab_id, cx);
                                             cx.notify();
                                         })),
                                     )
@@ -209,6 +213,7 @@ impl NoveltyApp {
                                                 session.go_forward(cx);
                                             }
                                             this.refresh_analysis_if_engine_selected(tab_id, cx);
+                                            this.refresh_explorer_if_needed(tab_id, cx);
                                             cx.notify();
                                         })),
                                     )
@@ -225,6 +230,7 @@ impl NoveltyApp {
                                                 session.go_to_history(0, cx);
                                             }
                                             this.refresh_analysis_if_engine_selected(tab_id, cx);
+                                            this.refresh_explorer_if_needed(tab_id, cx);
                                             cx.notify();
                                         })),
                                     ),
@@ -303,6 +309,7 @@ impl NoveltyApp {
                         session.go_to_history(index, cx);
                     }
                     this.refresh_analysis_if_engine_selected(tab_id, cx);
+                    this.refresh_explorer_if_needed(tab_id, cx);
                     cx.notify();
                 }),
             )
@@ -433,97 +440,96 @@ impl NoveltyApp {
     }
 
     fn render_analysis_panel(
-        &self,
+        &mut self,
         session_index: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let tab_id = self.tabs[session_index].id();
+        if let Some(session) = self.game_analysis_at(session_index) {
+            self.refresh_explorer_if_needed(session.id, cx);
+        }
         let panel_tab = self
             .game_analysis_at(session_index)
-            .map(|s| s.panel_tab)
-            .unwrap_or_default();
-        let tab_index = panel_tab.index();
+            .map(|s| s.side_panel_tab)
+            .unwrap_or(SidePanelTab::Engine);
+        let tabs = SidePanelTab::GAME_ANALYSIS;
+        let selected_index = panel_tab.index_in(tabs);
 
-        v_flex()
-            .flex_shrink_0()
-            .w(px(380.))
-            .h_full()
-            .min_h_0()
-            .border_l_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
-            .child(
-                TabBar::new(SharedString::from(format!("analysis-panel-tabs-{tab_id}")))
-                    .flex_shrink_0()
-                    .px_2()
-                    .pt_2()
-                    .selected_index(tab_index)
-                    .on_click(cx.listener(move |this, ix: &usize, _, cx| {
-                        if let Some(session) = this.game_analysis_at_mut(session_index) {
-                            session.panel_tab = AnalysisPanelTab::from_index(*ix);
-                        }
-                        cx.notify();
-                    }))
-                    .child(Tab::new().label("Engine"))
-                    .child(Tab::new().label("Game")),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .child(match panel_tab {
-                        AnalysisPanelTab::Engine => {
-                            let analyzing = self
-                                .game_analysis_at(session_index)
-                                .is_some_and(|s| s.analyzing);
-                            let depth = self
-                                .game_analysis_at(session_index)
-                                .map(|s| s.settings.depth)
-                                .unwrap_or(16);
-                            let line_count = self
-                                .game_analysis_at(session_index)
-                                .map(|s| s.settings.line_count)
-                                .unwrap_or(3);
-                            let show_engine_lines = self
-                                .game_analysis_at(session_index)
-                                .map(|s| s.settings.show_engine_lines)
-                                .unwrap_or(true);
-                            let lines = self
-                                .game_analysis_at(session_index)
-                                .and_then(|s| s.analysis.as_ref())
-                                .map(|a| a.lines.as_slice())
-                                .unwrap_or(&[]);
-                            let result_depth = self
-                                .game_analysis_at(session_index)
-                                .and_then(|s| s.analysis.as_ref())
-                                .map(|a| a.depth)
-                                .unwrap_or(0);
-                            self.render_engine_panel(
-                                &format!("analysis-engine-{tab_id}"),
-                                EnginePanelTarget::GameAnalysis {
-                                    tab_id,
-                                    session_index,
-                                },
-                                EnginePanelState {
-                                    analyzing,
-                                    depth,
-                                    line_count,
-                                    show_engine_lines,
-                                    lines,
-                                    result_depth,
-                                },
-                                cx,
-                            )
-                            .into_any_element()
-                        }
-                        AnalysisPanelTab::Game => {
-                            self.render_analysis_game_tab(session_index, cx)
-                                .into_any_element()
-                        }
-                    }),
-            )
+        let content = match panel_tab {
+            SidePanelTab::Engine => {
+                let analyzing = self
+                    .game_analysis_at(session_index)
+                    .is_some_and(|s| s.engine.analyzing);
+                let depth = self
+                    .game_analysis_at(session_index)
+                    .map(|s| s.engine.settings.depth)
+                    .unwrap_or(16);
+                let line_count = self
+                    .game_analysis_at(session_index)
+                    .map(|s| s.engine.settings.line_count)
+                    .unwrap_or(3);
+                let show_engine_lines = self
+                    .game_analysis_at(session_index)
+                    .map(|s| s.engine.settings.show_engine_lines)
+                    .unwrap_or(true);
+                let lines = self
+                    .game_analysis_at(session_index)
+                    .and_then(|s| s.engine.analysis.as_ref())
+                    .map(|a| a.lines.as_slice())
+                    .unwrap_or(&[]);
+                let result_depth = self
+                    .game_analysis_at(session_index)
+                    .and_then(|s| s.engine.analysis.as_ref())
+                    .map(|a| a.depth)
+                    .unwrap_or(0);
+                self.render_engine_panel(
+                    &format!("analysis-engine-{tab_id}"),
+                    EnginePanelTarget::GameAnalysis {
+                        tab_id,
+                        session_index,
+                    },
+                    EnginePanelState {
+                        analyzing,
+                        depth,
+                        line_count,
+                        show_engine_lines,
+                        lines,
+                        result_depth,
+                    },
+                    cx,
+                )
+                .into_any_element()
+            }
+            SidePanelTab::Explorer => self
+                .render_explorer_moves_table(session_index, cx)
+                .into_any_element(),
+            SidePanelTab::Game => self
+                .render_analysis_game_tab(session_index, cx)
+                .into_any_element(),
+            _ => div().into_any_element(),
+        };
+
+        let tab_id_for_panel = tab_id;
+        self.render_right_panel(
+            SharedString::from(format!("analysis-panel-{tab_id_for_panel}")),
+            tabs,
+            selected_index,
+            move |this, index, cx| {
+                let tab_id = this
+                    .game_analysis_at(session_index)
+                    .map(|session| session.id)
+                    .unwrap_or(0);
+                if let Some(session) = this.game_analysis_at_mut(session_index) {
+                    session.side_panel_tab = SidePanelTab::from_index(tabs, index);
+                }
+                if SidePanelTab::from_index(tabs, index) == SidePanelTab::Explorer {
+                    this.refresh_explorer_if_needed(tab_id, cx);
+                }
+                cx.notify();
+            },
+            content,
+            cx,
+        )
     }
 
     fn render_analysis_game_tab(

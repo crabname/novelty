@@ -4,14 +4,14 @@ use std::path::PathBuf;
 
 use gpui::*;
 use gpui_component::input::InputState;
-use gpui_chessboard::{
-    config::DrawableConfigPatch, config::MovableConfigPatch, ChessboardApi, ChessboardView,
-    Config, MovableColor,
-};
+use gpui_chessboard::{ChessboardApi, ChessboardView};
 
-use crate::graph::{legal_dests_at, turn_color};
+use crate::board::{apply_board_config, BoardConfig};
+use crate::graph::{legal_dests_at, play_san_at};
 use crate::move_tree::MoveTree;
 use crate::opening_book::{format_opening, lookup_fens};
+use crate::opening_explorer::{ExplorerHost, ExplorerState};
+use crate::panel_tabs::SidePanelTab;
 use crate::pgn_tree::{format_repertoire_pgn_map, parse_repertoire_pgn, ParsedRepertoire};
 use crate::repertoire;
 
@@ -30,6 +30,8 @@ pub struct RepertoireSession {
     pub dirty: bool,
     pub needs_pgn_ui_sync: bool,
     pub status: SharedString,
+    pub side_panel_tab: SidePanelTab,
+    pub explorer: ExplorerState,
 }
 
 impl RepertoireSession {
@@ -60,6 +62,8 @@ impl RepertoireSession {
             dirty: false,
             needs_pgn_ui_sync: false,
             status: "Create a repertoire or open an existing one".into(),
+            side_panel_tab: SidePanelTab::Explorer,
+            explorer: ExplorerState::default(),
         }
     }
 
@@ -113,29 +117,16 @@ impl RepertoireSession {
         let current = self.tree.current();
         let fen = current.fen.clone();
         let last_move = self.tree.last_move_keys().map(|(orig, dest)| vec![orig, dest]);
-        let dests = legal_dests_at(&fen).unwrap_or_default();
 
-        self.api.set(
-            Config {
-                fen: Some(fen),
-                turn_color: Some(turn_color(&self.tree.current().fen)),
-                view_only: Some(false),
-                last_move: Some(last_move),
-                movable: Some(MovableConfigPatch {
-                    free: Some(false),
-                    color: Some(Some(MovableColor::Both)),
-                    dests: Some(Some(dests)),
-                    show_dests: Some(true),
-                    ..Default::default()
-                }),
-                drawable: Some(DrawableConfigPatch {
-                    auto_shapes: Some(Vec::new()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            cx,
-        );
+        let config = BoardConfig {
+            fen,
+            last_move,
+            dests: legal_dests_at(&self.tree.current().fen).unwrap_or_default(),
+            show_dests: true,
+            shapes: Vec::new(),
+            eval: None,
+        };
+        apply_board_config(&self.api, &config, cx);
     }
 
     fn sync_board_from_tree(&mut self, cx: &mut App) {
@@ -270,5 +261,41 @@ impl RepertoireSession {
         )
         .into();
         Ok(())
+    }
+}
+
+impl ExplorerHost for RepertoireSession {
+    fn explorer_fen(&self) -> &str {
+        &self.tree.current().fen
+    }
+
+    fn explorer_state(&self) -> &ExplorerState {
+        &self.explorer
+    }
+
+    fn explorer_state_mut(&mut self) -> &mut ExplorerState {
+        &mut self.explorer
+    }
+
+    fn play_explorer_san(&mut self, san: &str, cx: &mut App) {
+        let Ok((_, _, orig, dest)) = play_san_at(&self.tree.current().fen, san) else {
+            return;
+        };
+        if self.tree.make_move_from_board(&orig, &dest).is_err() {
+            return;
+        }
+        self.last_synced_move = Some((orig, dest));
+        self.dirty = true;
+        self.status = if self.tree.variation_mode {
+            "Added variation".into()
+        } else {
+            "Move added".into()
+        };
+        self.needs_pgn_ui_sync = true;
+        self.last_parsed_pgn = self.current_pgn();
+        self.sync_board_from_tree(cx);
+        if self.file_path.is_some() {
+            let _ = self.save_to_file();
+        }
     }
 }
