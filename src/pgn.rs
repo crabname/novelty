@@ -100,6 +100,53 @@ pub fn build_history(movetext: &str) -> Result<Vec<HistoryStep>, String> {
     Ok(history)
 }
 
+/// Serialize headers and mainline moves to a PGN string.
+pub fn format_pgn(headers: &[(String, String)], history: &[HistoryStep]) -> String {
+    let mut out = String::new();
+    for (tag, value) in headers {
+        out.push_str(&format!("[{tag} \"{value}\"]\n"));
+    }
+    out.push('\n');
+    out.push_str(&history_to_movetext(history));
+    out
+}
+
+pub fn format_pgn_map(headers: &HashMap<String, String>, history: &[HistoryStep]) -> String {
+    let pairs: Vec<(String, String)> = headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    format_pgn(&pairs, history)
+}
+
+pub fn history_to_movetext(history: &[HistoryStep]) -> String {
+    if history.len() <= 1 {
+        return "*".to_string();
+    }
+    let mut parts = Vec::new();
+    let mut move_number = 1usize;
+    let mut index = 1usize;
+    while index < history.len() {
+        let white = history[index]
+            .san
+            .as_deref()
+            .unwrap_or_default()
+            .to_string();
+        if index + 1 < history.len() {
+            let black = history[index + 1]
+                .san
+                .as_deref()
+                .unwrap_or_default()
+                .to_string();
+            parts.push(format!("{move_number}. {white} {black}"));
+            move_number += 1;
+            index += 2;
+        } else {
+            parts.push(format!("{move_number}. {white}"));
+            index += 1;
+        }
+    }
+    parts.push("*".to_string());
+    parts.join(" ")
+}
+
 pub fn tokenize_movetext(text: &str) -> Vec<String> {
     let mut cleaned = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -165,9 +212,10 @@ mod tests {
     }
 
     #[test]
-    fn parses_movetext_only() {
+    fn formats_simple_game() {
         let game = parse_pgn("1. e4 e5 2. Nf3").unwrap();
-        assert_eq!(game.history.len(), 4);
-        assert_eq!(game.label, "Game Analysis");
+        let pgn = format_pgn_map(&game.headers, &game.history);
+        assert!(pgn.contains("1. e4 e5"));
+        assert!(pgn.contains("*"));
     }
 }

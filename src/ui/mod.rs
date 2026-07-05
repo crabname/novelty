@@ -6,6 +6,7 @@ mod engines;
 mod history;
 mod home;
 mod next_moves;
+mod repertoire;
 mod settings;
 mod sidebar;
 mod stub;
@@ -65,7 +66,7 @@ impl Render for NoveltyApp {
 
 impl NoveltyApp {
     fn render_active_tab(
-        &self,
+        &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -73,6 +74,7 @@ impl NoveltyApp {
             AppTab::Home { .. } => self.render_home(cx).into_any_element(),
             AppTab::OpeningTree { .. } => self.render_opening_tree(window, cx).into_any_element(),
             AppTab::GameAnalysis { .. } => self.render_game_analysis(window, cx).into_any_element(),
+            AppTab::Repertoire { .. } => self.render_repertoire(window, cx).into_any_element(),
             AppTab::Engines { .. } => self.render_engines(cx).into_any_element(),
             AppTab::Settings { .. } => self.render_settings(cx).into_any_element(),
             AppTab::Stub { kind, .. } => self.render_stub(*kind, cx).into_any_element(),

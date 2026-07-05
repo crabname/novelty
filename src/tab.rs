@@ -4,6 +4,7 @@ use gpui::*;
 use gpui_component::IconName;
 
 use crate::analysis_session::AnalysisSession;
+use crate::repertoire_session::RepertoireSession;
 use crate::session::ProfileSession;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,7 +61,10 @@ impl TabKind {
     }
 
     pub fn is_implemented(self) -> bool {
-        matches!(self, Self::OpeningTree | Self::Engine | Self::GameAnalysis | Self::Settings)
+        matches!(
+            self,
+            Self::OpeningTree | Self::Engine | Self::GameAnalysis | Self::Settings | Self::Repertoire
+        )
     }
 
     pub fn icon(self) -> IconName {
@@ -94,6 +98,7 @@ pub enum AppTab {
     Home { id: u64 },
     OpeningTree { id: u64, session: ProfileSession },
     GameAnalysis { id: u64, session: AnalysisSession },
+    Repertoire { id: u64, session: RepertoireSession },
     Engines { id: u64 },
     Settings { id: u64 },
     Stub { id: u64, kind: TabKind },
@@ -105,6 +110,7 @@ impl AppTab {
             Self::Home { id } => *id,
             Self::OpeningTree { id, .. } => *id,
             Self::GameAnalysis { id, .. } => *id,
+            Self::Repertoire { id, .. } => *id,
             Self::Engines { id } => *id,
             Self::Settings { id } => *id,
             Self::Stub { id, .. } => *id,
@@ -116,6 +122,7 @@ impl AppTab {
             Self::Home { .. } => "Home".into(),
             Self::OpeningTree { session, .. } => session.label.clone(),
             Self::GameAnalysis { session, .. } => session.label.clone(),
+            Self::Repertoire { session, .. } => session.label.clone(),
             Self::Engines { .. } => TabKind::Engine.label().into(),
             Self::Settings { .. } => TabKind::Settings.label().into(),
             Self::Stub { kind, .. } => kind.label().into(),
@@ -146,6 +153,20 @@ impl AppTab {
     pub fn game_analysis_mut(&mut self) -> Option<&mut AnalysisSession> {
         match self {
             Self::GameAnalysis { session, .. } => Some(session),
+            _ => None,
+        }
+    }
+
+    pub fn repertoire(&self) -> Option<&RepertoireSession> {
+        match self {
+            Self::Repertoire { session, .. } => Some(session),
+            _ => None,
+        }
+    }
+
+    pub fn repertoire_mut(&mut self) -> Option<&mut RepertoireSession> {
+        match self {
+            Self::Repertoire { session, .. } => Some(session),
             _ => None,
         }
     }

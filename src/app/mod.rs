@@ -1,3 +1,4 @@
+mod repertoire;
 mod lichess_account;
 mod load;
 mod uci;
@@ -15,6 +16,7 @@ use crate::engines::{self, LocalEngine};
 use crate::fetch::{LoadPeriod, PlayerColor, Site, TimeControlFilter};
 use crate::lichess::{self, LichessSession};
 use crate::profiles::remember_profile;
+use crate::repertoire_session::RepertoireSession;
 use crate::session::ProfileSession;
 use crate::tab::{AppTab, TabKind};
 
@@ -215,6 +217,21 @@ impl NoveltyApp {
             .iter()
             .position(|tab| tab.game_analysis().is_some_and(|session| session.board == board))
         else {
+            let Some(index) = self
+                .tabs
+                .iter()
+                .position(|tab| tab.repertoire().is_some_and(|session| session.board == board))
+            else {
+                return;
+            };
+            if let Some(session) = self.tabs.get_mut(index).and_then(|tab| tab.repertoire_mut()) {
+                if session.on_board_changed(cx) && index == self.active_tab {
+                    cx.notify();
+                }
+            }
+            if index == self.active_tab {
+                cx.notify();
+            }
             return;
         };
         if let Some(session) = self.tabs.get_mut(index).and_then(|tab| tab.game_analysis_mut()) {
@@ -245,6 +262,7 @@ impl NoveltyApp {
         match kind {
             TabKind::OpeningTree => self.open_opening_tree_tab(window, cx),
             TabKind::GameAnalysis => self.open_game_analysis_tab(window, cx),
+            TabKind::Repertoire => self.open_repertoire_tab(window, cx),
             TabKind::Engine => self.open_engines_tab(cx),
             TabKind::Settings => self.open_settings_tab(cx),
             _ => {
@@ -341,6 +359,54 @@ impl NoveltyApp {
         cx.notify();
     }
 
+    fn open_repertoire_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let id = self.next_tab_id;
+        self.next_tab_id += 1;
+        let (board, api) = Chessground::new(
+            Config::default(),
+            ChessboardCallbacks::default(),
+            window,
+            cx,
+        );
+        let board_watch = board.clone();
+        cx.observe(&board_watch, |app, board, cx| {
+            app.on_board_changed(board, cx);
+        })
+        .detach();
+
+        let pgn_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .multi_line(true)
+                .rows(10)
+                .placeholder("PGN updates as you play moves…")
+        });
+        let name_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Repertoire name (e.g. caro)")
+        });
+        let pgn_watch = pgn_input.clone();
+        let tab_id = id;
+        cx.subscribe(&pgn_watch, move |app, input, event, cx| {
+            if matches!(event, InputEvent::Change) {
+                let text = input.read(cx).value();
+                let loaded = app
+                    .repertoire_by_id_mut(tab_id)
+                    .is_some_and(|session| session.try_load_pgn_from_text(&text, cx));
+                if loaded {
+                    cx.notify();
+                }
+            }
+        })
+        .detach();
+
+        let mut session =
+            RepertoireSession::new(id, board, api, pgn_input, name_input);
+        session.flush_pgn_ui_if_needed(window, cx);
+        session.refresh_board(cx);
+        self.tabs.push(AppTab::Repertoire { id, session });
+        self.active_tab = self.tabs.len() - 1;
+        cx.notify();
+    }
+
     pub(crate) fn close_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         if index == 0 || self.tabs.len() <= 1 || index >= self.tabs.len() {
             return;
@@ -353,6 +419,9 @@ impl NoveltyApp {
             session.api.destroy(cx);
         }
         if let AppTab::GameAnalysis { session, .. } = &tab {
+            session.api.destroy(cx);
+        }
+        if let AppTab::Repertoire { session, .. } = &tab {
             session.api.destroy(cx);
         }
         if self.active_tab > index {
@@ -405,6 +474,10 @@ impl NoveltyApp {
                     session.go_back(cx);
                     self.refresh_analysis_if_engine_selected(tab_id, cx);
                     cx.notify();
+                } else if let Some(session) = self.active_repertoire_mut() {
+                    cx.stop_propagation();
+                    session.go_back(cx);
+                    cx.notify();
                 }
             }
             "right" => {
@@ -419,6 +492,10 @@ impl NoveltyApp {
                     let tab_id = session.id;
                     session.go_forward(cx);
                     self.refresh_analysis_if_engine_selected(tab_id, cx);
+                    cx.notify();
+                } else if let Some(session) = self.active_repertoire_mut() {
+                    cx.stop_propagation();
+                    session.go_forward(cx);
                     cx.notify();
                 }
             }
