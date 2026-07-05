@@ -10,8 +10,8 @@ gpui = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac10
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac101b7cf49d3d22451ac1093fe", features = [
     "font-kit",
 ] }
-gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "063e55bbc4fb13907a988111e3581595cbcaefde" }
-gpui-component-assets = { git = "https://github.com/longbridge/gpui-component", rev = "063e55bbc4fb13907a988111e3581595cbcaefde", package = "gpui-component-assets" }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "b7e63cc29018c27bb24788ddb212f4cbdd861334" }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component", rev = "b7e63cc29018c27bb24788ddb212f4cbdd861334", package = "gpui-component-assets" }
 gpui-chessboard = { git = "https://github.com/crabname/gpui-chessboard.git" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 serde = { version = "1", features = ["derive"] }

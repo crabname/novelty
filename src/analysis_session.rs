@@ -131,6 +131,7 @@ impl AnalysisSession {
 
         let config = BoardConfig {
             fen: self.current_fen.clone(),
+            orientation: gpui_chessboard::types::Color::White,
             last_move,
             dests: legal_dests_at(&self.current_fen).unwrap_or_default(),
             show_dests: true,

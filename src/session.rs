@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use gpui::*;
 
 use gpui_chessboard::{ChessboardApi, ChessboardView, Key};
+use gpui_chessboard::types::Color;
 
 use crate::analysis_session::AnalysisSettings;
 use crate::board::{apply_board_config, BoardConfig};
@@ -134,6 +135,7 @@ impl ProfileSession {
 
         let config = BoardConfig {
             fen: self.current_fen.clone(),
+            orientation: Color::White,
             last_move,
             dests,
             show_dests: self.next_move_count > 0,

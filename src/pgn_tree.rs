@@ -371,8 +371,27 @@ fn write_move_line(
     *white_turn = !*white_turn;
 }
 
-fn fen_turn(fen: &str) -> bool {
+pub fn fen_turn(fen: &str) -> bool {
     fen.split_whitespace().nth(1).is_some_and(|t| t == "w")
+}
+
+/// PGN move number prefix before a SAN (e.g. `1. `, `2... `, or empty).
+pub fn move_prefix_label(move_number: usize, white_to_move: bool, variation_entry: bool) -> String {
+    if white_to_move {
+        format!("{move_number}. ")
+    } else if variation_entry {
+        format!("{move_number}... ")
+    } else {
+        String::new()
+    }
+}
+
+pub fn advance_move_state(white_to_move: bool, move_number: usize) -> (usize, bool) {
+    if white_to_move {
+        (move_number, false)
+    } else {
+        (move_number + 1, true)
+    }
 }
 
 fn fen_to_chess(fen_str: &str) -> Result<Chess, String> {

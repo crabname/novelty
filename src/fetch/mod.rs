@@ -181,9 +181,21 @@ pub enum PlayerColor {
 
 impl PlayerColor {
     pub(crate) fn lichess_param(self) -> &'static str {
+        self.orientation_value()
+    }
+
+    pub fn orientation_value(self) -> &'static str {
         match self {
             Self::White => "white",
             Self::Black => "black",
+        }
+    }
+
+    pub fn from_orientation(value: &str) -> Self {
+        if value.eq_ignore_ascii_case("black") {
+            Self::Black
+        } else {
+            Self::White
         }
     }
 }

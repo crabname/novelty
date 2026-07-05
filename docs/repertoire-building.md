@@ -258,4 +258,6 @@ Uses `search_all` at each node (expensive). Mitigations:
 
 ## Related docs
 
-- [databases.md](./databases.md) — storage, cross-database search, catalog
+- [repertoire-from-games.md](./repertoire-from-games.md) — import lines from player
+  games (Lichess / Chess.com) at the current position
+- [databases.md](./databases.md) — local cross-database search (future alternative source)

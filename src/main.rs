@@ -27,6 +27,7 @@ mod profiles;
 mod move_tree;
 mod pgn_tree;
 mod repertoire;
+mod repertoire_import;
 mod repertoire_session;
 mod session;
 mod tab;

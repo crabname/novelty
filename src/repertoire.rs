@@ -4,9 +4,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::engines::config_dir;
+use crate::fetch::{PlayerColor, Site};
 use crate::graph::start_fen;
 use crate::move_tree::MoveTree;
 use crate::pgn_tree::format_repertoire_pgn;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LinkedProfile {
+    pub username: String,
+    pub site: Site,
+}
 
 pub fn repertoires_dir() -> PathBuf {
     config_dir().join("repertoires")
@@ -29,7 +36,7 @@ pub fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
-pub fn initial_headers(name: &str) -> Vec<(String, String)> {
+pub fn initial_headers(name: &str, color: PlayerColor) -> Vec<(String, String)> {
     vec![
         ("Event".into(), name.to_string()),
         ("Site".into(), "?".into()),
@@ -37,11 +44,105 @@ pub fn initial_headers(name: &str) -> Vec<(String, String)> {
         ("White".into(), "?".into()),
         ("Black".into(), "?".into()),
         ("Result".into(), "*".into()),
-        ("Orientation".into(), "white".into()),
+        (
+            "Orientation".into(),
+            color.orientation_value().to_string(),
+        ),
     ]
 }
 
-pub fn create_repertoire(name: &str) -> Result<PathBuf, String> {
+pub fn player_color_from_headers(headers: &[(String, String)]) -> PlayerColor {
+    headers
+        .iter()
+        .find(|(tag, _)| tag == "Orientation")
+        .map(|(_, value)| PlayerColor::from_orientation(value))
+        .unwrap_or(PlayerColor::White)
+}
+
+pub fn set_linked_profile(
+    headers: &mut Vec<(String, String)>,
+    username: &str,
+    site: Site,
+    color: PlayerColor,
+) {
+    let username = username.trim();
+    if username.is_empty() {
+        return;
+    }
+    let site_value = match site {
+        Site::Lichess => format!("https://lichess.org/@/{username}"),
+        Site::ChessCom => format!("https://www.chess.com/member/{username}"),
+    };
+    set_header(headers, "Site", &site_value);
+    match color {
+        PlayerColor::White => {
+            set_header(headers, "White", username);
+            set_header(headers, "Black", "?");
+        }
+        PlayerColor::Black => {
+            set_header(headers, "White", "?");
+            set_header(headers, "Black", username);
+        }
+    }
+}
+
+pub fn linked_profile_from_headers(headers: &[(String, String)]) -> Option<LinkedProfile> {
+    let username = profile_username_from_headers(headers)?;
+    let site = profile_site_from_headers(headers)?;
+    Some(LinkedProfile { username, site })
+}
+
+pub fn profile_username_from_headers(headers: &[(String, String)]) -> Option<String> {
+    let color = player_color_from_headers(headers);
+    let tag = match color {
+        PlayerColor::White => "White",
+        PlayerColor::Black => "Black",
+    };
+    headers
+        .iter()
+        .find(|(name, _)| name == tag)
+        .map(|(_, value)| value.trim().to_string())
+        .filter(|value| !value.is_empty() && value != "?")
+}
+
+pub fn profile_site_from_headers(headers: &[(String, String)]) -> Option<Site> {
+    let site = headers
+        .iter()
+        .find(|(name, _)| name == "Site")
+        .map(|(_, value)| value.to_ascii_lowercase())?;
+    if site.contains("chess.com") {
+        Some(Site::ChessCom)
+    } else if site.contains("lichess.org") {
+        Some(Site::Lichess)
+    } else {
+        None
+    }
+}
+
+/// Updates `[ECO]` and `[Opening]` from the mainline position history.
+pub fn sync_opening_headers(headers: &mut Vec<(String, String)>, tree: &MoveTree) {
+    if let Some(opening) = tree.mainline_opening() {
+        set_header(headers, "ECO", &opening.eco);
+        set_header(headers, "Opening", &opening.name);
+    } else {
+        remove_header(headers, "ECO");
+        remove_header(headers, "Opening");
+    }
+}
+
+fn set_header(headers: &mut Vec<(String, String)>, tag: &str, value: &str) {
+    if let Some((_, existing)) = headers.iter_mut().find(|(name, _)| name == tag) {
+        *existing = value.to_string();
+    } else {
+        headers.push((tag.to_string(), value.to_string()));
+    }
+}
+
+fn remove_header(headers: &mut Vec<(String, String)>, tag: &str) {
+    headers.retain(|(name, _)| name != tag);
+}
+
+pub fn create_repertoire(name: &str, color: PlayerColor) -> Result<PathBuf, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("Repertoire name required".into());
@@ -56,7 +157,7 @@ pub fn create_repertoire(name: &str) -> Result<PathBuf, String> {
     if path.is_file() {
         return Err(format!("Repertoire “{name}” already exists"));
     }
-    let headers = initial_headers(name);
+    let headers = initial_headers(name, color);
     let tree = MoveTree::from_fen(start_fen());
     let pgn = format_repertoire_pgn(&headers, &tree);
     fs::write(&path, pgn).map_err(|err| err.to_string())?;
@@ -110,10 +211,45 @@ pub fn repertoire_display_name(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fetch::PlayerColor;
+    use crate::pgn_tree::parse_repertoire_pgn;
 
     #[test]
     fn sanitize_keeps_alphanumeric() {
         assert_eq!(sanitize_filename("Caro-Kann"), "Caro-Kann");
         assert_eq!(sanitize_filename("  caro  "), "caro");
+    }
+
+    #[test]
+    fn mainline_opening_and_save_headers_for_e4_e5() {
+        let pgn = r#"[Event "King's Pawn"]
+
+1. e4 e5 *"#;
+        let parsed = parse_repertoire_pgn(pgn).expect("parse repertoire");
+        let tree = parsed.tree;
+        let opening = tree.mainline_opening().expect("e4 e5 opening");
+        assert_eq!(opening.eco, "C20");
+
+        let mut headers = initial_headers("King's Pawn", PlayerColor::White);
+        sync_opening_headers(&mut headers, &tree);
+
+        assert_eq!(
+            headers
+                .iter()
+                .find(|(tag, _)| tag == "ECO")
+                .map(|(_, value)| value.as_str()),
+            Some("C20")
+        );
+        assert_eq!(
+            headers
+                .iter()
+                .find(|(tag, _)| tag == "Opening")
+                .map(|(_, value)| value.as_str()),
+            Some(opening.name.as_str())
+        );
+
+        let pgn = format_repertoire_pgn(&headers, &tree);
+        assert!(pgn.contains("[ECO \"C20\"]"));
+        assert!(pgn.contains(&format!("[Opening \"{}\"]", opening.name)));
     }
 }

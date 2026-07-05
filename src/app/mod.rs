@@ -1,4 +1,5 @@
 mod repertoire;
+mod repertoire_import_load;
 mod lichess_account;
 mod load;
 mod explorer;
@@ -390,6 +391,16 @@ impl NoveltyApp {
         let name_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder("Repertoire name (e.g. caro)")
         });
+        let default_profile = self
+            .profile_history
+            .first()
+            .cloned()
+            .unwrap_or_else(|| self.username.read(cx).value().to_string());
+        let profile_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .default_value(default_profile)
+                .placeholder("Lichess / Chess.com username")
+        });
         let pgn_watch = pgn_input.clone();
         let tab_id = id;
         cx.subscribe(&pgn_watch, move |app, input, event, cx| {
@@ -406,7 +417,7 @@ impl NoveltyApp {
         .detach();
 
         let mut session =
-            RepertoireSession::new(id, board, api, pgn_input, name_input);
+            RepertoireSession::new(id, board, api, pgn_input, name_input, profile_input);
         session.flush_pgn_ui_if_needed(window, cx);
         session.refresh_board(cx);
         self.tabs.push(AppTab::Repertoire { id, session });
@@ -429,6 +440,7 @@ impl NoveltyApp {
             session.api.destroy(cx);
         }
         if let AppTab::Repertoire { session, .. } = &tab {
+            session.cancel_import.store(true, std::sync::atomic::Ordering::Relaxed);
             session.api.destroy(cx);
         }
         if self.active_tab > index {

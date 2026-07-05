@@ -158,6 +158,8 @@ fn search_all(
 
 ## Related plans
 
+- [repertoire-from-games.md](./repertoire-from-games.md) — import continuations from
+  a player's Lichess/Chess.com games at the current position into the repertoire tree.
 - [repertoire-building.md](./repertoire-building.md) — when composing a repertoire,
   surface popular next moves from local databases and Lichess, and verify candidate
   lines with the engine.
