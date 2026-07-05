@@ -93,13 +93,13 @@ pub fn list_repertoires() -> Vec<PathBuf> {
 }
 
 pub fn repertoire_display_name(path: &Path) -> String {
-    if let Ok(text) = load_repertoire_file(path) {
-        if let Ok(game) = crate::pgn_tree::parse_repertoire_pgn(&text) {
-            if let Some(event) = game.headers.get("Event") {
-                return event.clone();
-            }
-            return game.label;
+    if let Ok(text) = load_repertoire_file(path)
+        && let Ok(game) = crate::pgn_tree::parse_repertoire_pgn(&text)
+    {
+        if let Some(event) = game.headers.get("Event") {
+            return event.clone();
         }
+        return game.label;
     }
     path.file_stem()
         .and_then(|s| s.to_str())

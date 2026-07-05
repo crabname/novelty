@@ -24,7 +24,6 @@ pub struct EngineLine {
     pub rank: u32,
     pub pv: Vec<String>,
     pub score: Option<String>,
-    pub depth: Option<u32>,
     pub eval: Option<EvalDisplay>,
 }
 
@@ -226,7 +225,6 @@ impl RunningEngine {
                             rank: rank as u32,
                             pv: info.pv.iter().map(|mv| mv.to_string()).collect(),
                             score: info.score.as_ref().map(format_score),
-                            depth: Some(depth),
                             eval,
                         },
                     );

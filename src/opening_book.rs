@@ -112,7 +112,7 @@ fn setup_after_pgn(pgn: &str) -> Option<Setup> {
         let mv = san.to_move(&pos).ok()?;
         pos.play_unchecked(mv);
     }
-    Some(pos.to_setup(EnPassantMode::Legal)).map(normalize_setup)
+    Some(normalize_setup(pos.to_setup(EnPassantMode::Legal)))
 }
 
 fn normalize_setup(mut setup: Setup) -> Setup {

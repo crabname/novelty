@@ -270,10 +270,10 @@ fn pick_asset<'a>(assets: &'a [GithubAsset], preferences: &[&str]) -> Option<&'a
         if let Some(asset) = assets.iter().find(|asset| asset.name == *preference) {
             return Some(asset);
         }
-        if let Some(prefix) = preference.strip_suffix('*') {
-            if let Some(asset) = assets.iter().find(|asset| asset.name.starts_with(prefix)) {
-                return Some(asset);
-            }
+        if let Some(prefix) = preference.strip_suffix('*')
+            && let Some(asset) = assets.iter().find(|asset| asset.name.starts_with(prefix))
+        {
+            return Some(asset);
         }
     }
     None

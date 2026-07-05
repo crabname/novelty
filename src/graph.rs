@@ -150,7 +150,18 @@ struct EdgeAgg {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MoveNotation {
     San,
+    #[allow(dead_code)]
     Uci,
+}
+
+struct MoveRecord<'a> {
+    source_fen: &'a str,
+    target_fen: &'a str,
+    san: &'a str,
+    orig: Key,
+    dest: Key,
+    meta: Option<&'a GameMeta>,
+    player_color: PlayerColor,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -167,10 +178,6 @@ impl OpeningGraph {
 
     pub fn game_count(&self) -> u32 {
         self.games
-    }
-
-    pub fn add_game_san(&mut self, san_moves: &str) -> Result<(), String> {
-        self.add_game(san_moves, MoveNotation::San, None, PlayerColor::White)
     }
 
     pub fn add_game(
@@ -222,7 +229,15 @@ impl OpeningGraph {
         let (orig, dest) = move_keys(m);
         pos.play_unchecked(m);
         let target = position_fen(pos);
-        self.record_move(&source, &target, &san_label, orig, dest, meta, player_color);
+        self.record_move(MoveRecord {
+            source_fen: &source,
+            target_fen: &target,
+            san: &san_label,
+            orig,
+            dest,
+            meta,
+            player_color,
+        });
         Ok(())
     }
 
@@ -244,20 +259,28 @@ impl OpeningGraph {
         let (orig, dest) = move_keys(m);
         pos.play_unchecked(m);
         let target = position_fen(pos);
-        self.record_move(&source, &target, &san_label, orig, dest, meta, player_color);
+        self.record_move(MoveRecord {
+            source_fen: &source,
+            target_fen: &target,
+            san: &san_label,
+            orig,
+            dest,
+            meta,
+            player_color,
+        });
         Ok(())
     }
 
-    fn record_move(
-        &mut self,
-        source_fen: &str,
-        target_fen: &str,
-        san: &str,
-        orig: Key,
-        dest: Key,
-        meta: Option<&GameMeta>,
-        player_color: PlayerColor,
-    ) {
+    fn record_move(&mut self, record: MoveRecord<'_>) {
+        let MoveRecord {
+            source_fen,
+            target_fen,
+            san,
+            orig,
+            dest,
+            meta,
+            player_color,
+        } = record;
         let source_key = simplified_fen(source_fen);
         let node = self.nodes.entry(source_key).or_default();
         let edge = node.edges.entry(san.to_string()).or_insert_with(|| EdgeAgg {
@@ -500,8 +523,12 @@ mod tests {
     #[test]
     fn aggregates_lichess_san_line() {
         let mut graph = OpeningGraph::default();
-        graph.add_game_san("e4 e5 Nf3").unwrap();
-        graph.add_game_san("e4 e5").unwrap();
+        graph
+            .add_game("e4 e5 Nf3", MoveNotation::San, None, PlayerColor::White)
+            .unwrap();
+        graph
+            .add_game("e4 e5", MoveNotation::San, None, PlayerColor::White)
+            .unwrap();
         let moves = graph.moves_at(&start_fen());
         let e4 = moves.iter().find(|m| m.san == "e4").unwrap();
         assert_eq!(e4.count, 2);

@@ -70,26 +70,39 @@ fn lichess_meta(game: &LichessGame) -> GameMeta {
     }
 }
 
-async fn stream_lichess_chunk(
-    client: &litchee::LichessClient,
-    username: &str,
+struct LichessChunkParams<'a> {
+    username: &'a str,
     color: PlayerColor,
     since: Option<i64>,
     until: Option<i64>,
-    perf_types: Option<&str>,
+    perf_types: Option<&'a str>,
     time_controls: TimeControlFilter,
-    cancel: &Arc<AtomicBool>,
+    cancel: &'a Arc<AtomicBool>,
+}
+
+async fn stream_lichess_chunk(
+    client: &litchee::LichessClient,
+    params: &LichessChunkParams<'_>,
     on_game: &mut impl FnMut(LoadedGame) -> Result<(), String>,
 ) -> Result<(StreamOutcome, u32, u32, Option<i64>), String> {
+    let LichessChunkParams {
+        username,
+        color,
+        since,
+        until,
+        perf_types,
+        time_controls,
+        cancel,
+    } = params;
     let mut request = client
         .games()
         .export_user(username)
         .max(LICHESS_CHUNK_SIZE)
         .color(color.lichess_param());
-    if let Some(since) = since {
+    if let Some(since) = *since {
         request = request.since(since);
     }
-    if let Some(until) = until {
+    if let Some(until) = *until {
         request = request.until(until);
     }
     if let Some(perf_types) = perf_types {
@@ -130,7 +143,7 @@ async fn stream_lichess_chunk(
         {
             continue;
         }
-        if let Some(since) = since
+        if let Some(since) = *since
             && let Some(ts) = game.last_move_at
             && ts < since
         {
@@ -172,15 +185,18 @@ async fn stream_lichess_async(
         if cancelled(cancel) {
             return Ok((StreamOutcome::Cancelled, ingested));
         }
-        let (outcome, chunk_ingested, games_in_response, oldest_ts) = stream_lichess_chunk(
-            &client,
+        let chunk_params = LichessChunkParams {
             username,
             color,
             since,
             until,
-            perf_types.as_deref(),
+            perf_types: perf_types.as_deref(),
             time_controls,
             cancel,
+        };
+        let (outcome, chunk_ingested, games_in_response, oldest_ts) = stream_lichess_chunk(
+            &client,
+            &chunk_params,
             on_game,
         )
         .await?;

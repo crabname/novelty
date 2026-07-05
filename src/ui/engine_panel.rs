@@ -21,19 +21,31 @@ pub(crate) enum EnginePanelTarget {
     },
 }
 
+pub(crate) struct EnginePanelState<'a> {
+    pub analyzing: bool,
+    pub depth: u32,
+    pub line_count: u32,
+    pub show_engine_lines: bool,
+    pub lines: &'a [EngineLine],
+    pub result_depth: u32,
+}
+
 impl NoveltyApp {
     pub(crate) fn render_engine_panel(
         &self,
         panel_id_prefix: &str,
         target: EnginePanelTarget,
-        analyzing: bool,
-        depth: u32,
-        line_count: u32,
-        show_engine_lines: bool,
-        lines: &[EngineLine],
-        result_depth: u32,
+        state: EnginePanelState<'_>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let EnginePanelState {
+            analyzing,
+            depth,
+            line_count,
+            show_engine_lines,
+            lines,
+            result_depth,
+        } = state;
         v_flex()
             .size_full()
             .min_h_0()
@@ -208,7 +220,6 @@ impl NoveltyApp {
             .flex_wrap()
             .children(values.iter().map(|&value| {
                 let selected = value == current;
-                let kind = kind;
                 Button::new(SharedString::from(format!(
                     "{panel_id_prefix}-{kind}-{value}"
                 )))

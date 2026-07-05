@@ -4,7 +4,7 @@ use gpui_component::*;
 
 use crate::app::NoveltyApp;
 use crate::session::ControlPanelTab;
-use crate::ui::engine_panel::EnginePanelTarget;
+use crate::ui::engine_panel::{EnginePanelState, EnginePanelTarget};
 
 impl NoveltyApp {
     pub(crate) fn render_controls_panel(
@@ -80,12 +80,14 @@ impl NoveltyApp {
                                     session_id,
                                     session_index,
                                 },
-                                analyzing,
-                                depth,
-                                line_count,
-                                show_engine_lines,
-                                lines,
-                                result_depth,
+                                EnginePanelState {
+                                    analyzing,
+                                    depth,
+                                    line_count,
+                                    show_engine_lines,
+                                    lines,
+                                    result_depth,
+                                },
                                 cx,
                             )
                             .into_any_element()

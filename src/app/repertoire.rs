@@ -68,10 +68,10 @@ impl NoveltyApp {
         let result = self
             .active_repertoire_mut()
             .map(|session| session.save_to_file());
-        if let Some(Err(err)) = result {
-            if let Some(session) = self.active_repertoire_mut() {
-                session.status = err.into();
-            }
+        if let Some(Err(err)) = result
+            && let Some(session) = self.active_repertoire_mut()
+        {
+            session.status = err.into();
         }
         cx.notify();
     }

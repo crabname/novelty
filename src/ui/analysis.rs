@@ -12,7 +12,7 @@ use gpui_component::*;
 use crate::analysis_session::AnalysisPanelTab;
 use crate::app::NoveltyApp;
 use crate::session::HistoryStep;
-use crate::ui::engine_panel::EnginePanelTarget;
+use crate::ui::engine_panel::{EnginePanelState, EnginePanelTarget};
 use crate::ui::engine_pick::EnginePickTarget;
 
 const ANALYSIS_SIDEBAR_WIDTH: f32 = 280.;
@@ -506,12 +506,14 @@ impl NoveltyApp {
                                     tab_id,
                                     session_index,
                                 },
-                                analyzing,
-                                depth,
-                                line_count,
-                                show_engine_lines,
-                                lines,
-                                result_depth,
+                                EnginePanelState {
+                                    analyzing,
+                                    depth,
+                                    line_count,
+                                    show_engine_lines,
+                                    lines,
+                                    result_depth,
+                                },
                                 cx,
                             )
                             .into_any_element()

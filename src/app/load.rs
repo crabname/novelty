@@ -3,7 +3,7 @@ use std::sync::Arc;
 use gpui::*;
 
 use crate::constants::{UI_PROGRESS_INTERVAL, UI_TICK_MS};
-use crate::fetch::{LoadedGame, StreamOutcome};
+use crate::fetch::{LoadedGame, StreamGamesRequest, StreamOutcome};
 
 use super::NoveltyApp;
 
@@ -72,13 +72,15 @@ impl NoveltyApp {
             let lichess_token = lichess_token.clone();
             std::thread::spawn(move || {
                 let result = crate::fetch::stream_games(
-                    site,
-                    &fetch_user_thread,
-                    color,
-                    period,
-                    time_controls,
-                    lichess_token.as_deref(),
-                    &cancel_bg,
+                    StreamGamesRequest {
+                        site,
+                        username: &fetch_user_thread,
+                        color,
+                        period,
+                        time_controls,
+                        lichess_token: lichess_token.as_deref(),
+                        cancel: &cancel_bg,
+                    },
                     |game| {
                         let mut g = graph_bg.lock().expect("graph lock");
                         let ingest = match &game {

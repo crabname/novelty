@@ -130,10 +130,10 @@ fn pgn_header(pgn: &str, tag: &str) -> Option<String> {
     let needle = format!("[{tag} \"");
     for line in pgn.lines() {
         let line = line.trim();
-        if let Some(rest) = line.strip_prefix(&needle) {
-            if let Some(value) = rest.strip_suffix("\"]") {
-                return Some(value.to_string());
-            }
+        if let Some(rest) = line.strip_prefix(&needle)
+            && let Some(value) = rest.strip_suffix("\"]")
+        {
+            return Some(value.to_string());
         }
     }
     None

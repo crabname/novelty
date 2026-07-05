@@ -224,16 +224,29 @@ pub(crate) fn no_games_message(site: &str, user: &str, period: LoadPeriod) -> St
 }
 
 /// Stream games in the given period; returns outcome and ingested count.
+pub struct StreamGamesRequest<'a> {
+    pub site: Site,
+    pub username: &'a str,
+    pub color: PlayerColor,
+    pub period: LoadPeriod,
+    pub time_controls: TimeControlFilter,
+    pub lichess_token: Option<&'a str>,
+    pub cancel: &'a Arc<AtomicBool>,
+}
+
 pub fn stream_games(
-    site: Site,
-    username: &str,
-    color: PlayerColor,
-    period: LoadPeriod,
-    time_controls: TimeControlFilter,
-    lichess_token: Option<&str>,
-    cancel: &Arc<AtomicBool>,
+    request: StreamGamesRequest<'_>,
     mut on_game: impl FnMut(LoadedGame) -> Result<(), String>,
 ) -> Result<(StreamOutcome, u32), String> {
+    let StreamGamesRequest {
+        site,
+        username,
+        color,
+        period,
+        time_controls,
+        lichess_token,
+        cancel,
+    } = request;
     match site {
         Site::Lichess => lichess::stream_lichess(
             username,

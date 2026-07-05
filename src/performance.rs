@@ -107,12 +107,14 @@ mod tests {
 
     #[test]
     fn performance_from_position_details() {
-        let mut details = PositionDetails::default();
-        details.white_wins = 6;
-        details.black_wins = 2;
-        details.draws = 2;
-        details.total_opponent_elo = 1800 * 10;
-        details.opponent_elo_games = 10;
+        let details = PositionDetails {
+            white_wins: 6,
+            black_wins: 2,
+            draws: 2,
+            total_opponent_elo: 1800 * 10,
+            opponent_elo_games: 10,
+            ..Default::default()
+        };
 
         let perf = performance_details(&details, PlayerColor::White, true);
         assert_eq!(perf.results, "+6-2=2");

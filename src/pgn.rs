@@ -101,6 +101,7 @@ pub fn build_history(movetext: &str) -> Result<Vec<HistoryStep>, String> {
 }
 
 /// Serialize headers and mainline moves to a PGN string.
+#[cfg(test)]
 pub fn format_pgn(headers: &[(String, String)], history: &[HistoryStep]) -> String {
     let mut out = String::new();
     for (tag, value) in headers {
@@ -111,11 +112,13 @@ pub fn format_pgn(headers: &[(String, String)], history: &[HistoryStep]) -> Stri
     out
 }
 
+#[cfg(test)]
 pub fn format_pgn_map(headers: &HashMap<String, String>, history: &[HistoryStep]) -> String {
     let pairs: Vec<(String, String)> = headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     format_pgn(&pairs, history)
 }
 
+#[cfg(test)]
 pub fn history_to_movetext(history: &[HistoryStep]) -> String {
     if history.len() <= 1 {
         return "*".to_string();

@@ -403,11 +403,11 @@ fn push_text(out: &mut Vec<NotationSegment>, text: &str) {
     if text.is_empty() {
         return;
     }
-    if let Some(last) = out.last_mut() {
-        if last.position.is_none() {
-            last.text.push_str(text);
-            return;
-        }
+    if let Some(last) = out.last_mut()
+        && last.position.is_none()
+    {
+        last.text.push_str(text);
+        return;
     }
     out.push(NotationSegment {
         text: text.to_string(),

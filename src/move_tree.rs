@@ -3,7 +3,6 @@
 use gpui_chessboard::Key;
 
 use crate::graph::{play_move_keys, start_fen};
-use crate::session::HistoryStep;
 
 #[derive(Clone, Debug, Default)]
 pub struct TreeNode {
@@ -44,14 +43,6 @@ impl MoveTree {
 
     pub fn current(&self) -> &TreeNode {
         self.node_at(&self.position).unwrap_or(&self.root)
-    }
-
-    pub fn current_mut(&mut self) -> &mut TreeNode {
-        let position = self.position.clone();
-        if position.is_empty() {
-            return &mut self.root;
-        }
-        Self::node_at_mut(&mut self.root, &position).expect("invalid position")
     }
 
     pub fn node_at(&self, path: &[usize]) -> Option<&TreeNode> {
@@ -263,27 +254,11 @@ impl MoveTree {
             .collect()
     }
 
-    pub fn current_branch_index(&self) -> Option<usize> {
-        self.position.last().copied()
-    }
-
     pub fn last_move_keys(&self) -> Option<(Key, Key)> {
         let node = self.current();
         match (&node.orig, &node.dest) {
             (Some(orig), Some(dest)) => Some((orig.clone(), dest.clone())),
             _ => None,
         }
-    }
-
-    pub fn to_history_steps(&self) -> Vec<HistoryStep> {
-        self.mainline_steps()
-            .iter()
-            .map(|node| HistoryStep {
-                fen: node.fen.clone(),
-                san: node.san.clone(),
-                orig: node.orig.clone(),
-                dest: node.dest.clone(),
-            })
-            .collect()
     }
 }

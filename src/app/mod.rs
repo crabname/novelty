@@ -224,10 +224,10 @@ impl NoveltyApp {
             else {
                 return;
             };
-            if let Some(session) = self.tabs.get_mut(index).and_then(|tab| tab.repertoire_mut()) {
-                if session.on_board_changed(cx) && index == self.active_tab {
-                    cx.notify();
-                }
+            if let Some(session) = self.tabs.get_mut(index).and_then(|tab| tab.repertoire_mut())
+                && session.on_board_changed(cx) && index == self.active_tab
+            {
+                cx.notify();
             }
             if index == self.active_tab {
                 cx.notify();

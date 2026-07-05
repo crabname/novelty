@@ -154,10 +154,10 @@ impl AnalysisSession {
         let dests = legal_dests_at(&self.current_fen).unwrap_or_default();
 
         let mut shapes = Vec::new();
-        if self.settings.show_engine_lines {
-            if let Some(result) = &self.analysis {
-                shapes.extend(engine_line_shapes(result));
-            }
+        if self.settings.show_engine_lines
+            && let Some(result) = &self.analysis
+        {
+            shapes.extend(engine_line_shapes(result));
         }
 
         let eval = if self.selected_engine_id.is_some() {

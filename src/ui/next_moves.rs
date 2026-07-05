@@ -193,9 +193,8 @@ impl NoveltyApp {
         let tooltip = Self::performance_tooltip(
             mv.details.clone(),
             self.color,
-            !self
-                .opening_tree_at(session_index)
-                .is_some_and(|session| !session.username.is_empty()),
+            self.opening_tree_at(session_index)
+                .is_none_or(|session| session.username.is_empty()),
             san.clone(),
         );
         let results = self.results_bar(cx, &mv.details);

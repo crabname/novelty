@@ -146,10 +146,10 @@ impl ProfileSession {
         self.next_move_count = moves.len();
         let shapes = OpeningGraph::auto_shapes(&self.current_fen, &graph);
         let mut shapes = shapes;
-        if self.settings.show_engine_lines {
-            if let Some(analysis) = &self.analysis {
-                shapes.extend(engine_line_shapes(analysis));
-            }
+        if self.settings.show_engine_lines
+            && let Some(analysis) = &self.analysis
+        {
+            shapes.extend(engine_line_shapes(analysis));
         }
         let dests = OpeningGraph::dests_for_moves(&moves);
         let turn = turn_color(&self.current_fen);
