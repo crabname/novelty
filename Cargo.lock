@@ -2502,7 +2502,7 @@ dependencies = [
 [[package]]
 name = "gpui-chessboard"
 version = "0.1.0"
-source = "git+https://github.com/crabname/gpui-chessboard.git#53b1deb04e5f24506e113f3898b1e78833f35af3"
+source = "git+https://github.com/crabname/gpui-chessboard.git?rev=ff0b8bc958153c2a563e87340a7a56922956d184#ff0b8bc958153c2a563e87340a7a56922956d184"
 dependencies = [
  "gpui",
 ]
